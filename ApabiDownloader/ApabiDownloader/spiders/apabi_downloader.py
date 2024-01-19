@@ -65,7 +65,10 @@ class ApabiDownloaderSpider(scrapy.Spider):
     def on_online_read_page(self, response):
         self.logger.info("Got online read page.")
         self.create_var_dict(response)
-        yield from self.get_page_total(response)
+        if self.page_total is None:
+            yield from self.get_page_total(response)
+        else:
+            yield from self.get_img_url(response)
 
     def get_page_total(self, response):
         self.logger.info("Getting page total.")
@@ -93,7 +96,8 @@ class ApabiDownloaderSpider(scrapy.Spider):
         self.logger.info(f"Book has {self.page_total} pages.")
 
     def get_img_url(self, response):
-        self.set_page_total(response)
+        if self.page_total is None:
+            self.set_page_total(response)
         self.downloaded_items = []
         for page in range(self.page_total):
             if os.path.isfile(f"output/{str(page + 1)}.png"):
