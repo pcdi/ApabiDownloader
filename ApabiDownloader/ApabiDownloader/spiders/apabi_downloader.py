@@ -36,7 +36,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
 
     def after_login(self, response):
         if authentication_failed(response):
-            self.logger.error("Login failed")
+            self.logger.error("Login failed.")
             return
         self.logger.info("Login successful.")
         yield scrapy.Request(
