@@ -76,6 +76,9 @@ class ApabiDownloaderSpider(scrapy.Spider):
         # Some values are hidden as a string in one entry, need to dissect that
         var_dict.update(urllib.parse.parse_qsl(var_dict["urlrights"]))
         self.var_dict = var_dict
+        self.logger.info(
+            f'Downloading {self.var_dict["bookName"]} by {self.var_dict["creator"]}. '
+            f'Access is provided by {self.var_dict["txtOrgIdentifier"]}.')
 
     def on_online_read_page(self, response):
         self.logger.info("Got online read page.")
