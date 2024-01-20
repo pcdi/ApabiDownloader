@@ -142,7 +142,8 @@ class ApabiDownloaderSpider(scrapy.Spider):
         # See also reader.js:2499; window.onload for value initialization
         self.img_url = response.urljoin("command/imagepage.ashx")
         page = self.get_next_page_to_download(start_page=1)
-        yield from self.request_img(response, page)
+        if page <= self.page_total:
+            yield from self.request_img(response, page)
 
     def get_next_page_to_download(self, start_page):
         page = start_page
