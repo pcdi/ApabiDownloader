@@ -1,6 +1,6 @@
-import os.path
 import urllib.parse
 from datetime import datetime
+from pathlib import Path
 
 import scrapy
 
@@ -14,14 +14,29 @@ def authentication_failed(response):
 class ApabiDownloaderSpider(scrapy.Spider):
     name = "apabi_downloader"
     allowed_domains = ["apabi.lib.pku.edu.cn"]
+    output_dir_base = "output/"
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, book_detail_url=None, *args, **kwargs):
+        super(ApabiDownloaderSpider, self).__init__(*args, **kwargs)
         self.var_dict = None
         self.page_total = None
         self.downloaded_items = None
-        self.book_detail_url = "http://apabi.lib.pku.edu.cn/Usp/pku/?pid=book.detail&metaid=ISBN7-80149-306-0&cult=CN"
+        self.book_detail_url = book_detail_url
         self.img_url = None
+        self.output_folder_name = None
+        self.output_dir = None
+        self.make_output_dir()
+
+    def make_output_dir(self):
+        self.logger.info("Making output directory.")
+        try:
+            self.output_folder_name = urllib.parse.parse_qs(self.book_detail_url)["metaid"][0].lstrip("m.")
+            self.output_dir = self.output_dir_base + self.output_folder_name
+            Path(self.output_dir_base).mkdir(exist_ok=True)
+            Path(self.output_dir).mkdir(exist_ok=True)
+        except Exception as e:
+            self.logger.exception(e)
+            raise
 
     def start_requests(self):
         start_url = "http://apabi.lib.pku.edu.cn/Usp/pku/pub.mvc/?pid=login&cult=CN"
@@ -100,7 +115,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
             self.set_page_total(response)
         self.downloaded_items = []
         for page in range(self.page_total):
-            if os.path.isfile(f"output/{str(page + 1)}.png"):
+            if Path(f"{self.output_dir}/{str(page + 1)}.png").is_file():
                 self.downloaded_items.append(page + 1)
         # From reader.js:657; function getUrl(page)
         # See also reader.js:2499; window.onload for value initialization

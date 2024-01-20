@@ -10,5 +10,5 @@ from itemadapter import ItemAdapter
 
 class ApabidownloaderPipeline:
     def process_item(self, item, spider):
-        with open(f'output/{item["page"]}.png', "wb") as outfile:
+        with open(f'{spider.output_dir}/{item["page"]}.png', "wb") as outfile:
             outfile.write(item["image"])
