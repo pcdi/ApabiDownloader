@@ -26,7 +26,16 @@ class ApabiDownloaderSpider(scrapy.Spider):
     name = "apabi_downloader"
     output_dir_base = "output/"
 
-    def __init__(self, book_detail_url=None, *args, **kwargs):
+    def __init__(self, book_detail_url: str = None, *args, **kwargs) -> None:
+        """Initializes the spider instance with the book details.
+
+        Args:
+            book_detail_url: The URL of the book detail page in the Apabi digital
+              library. This URL must contain "book.detail" and point to the page that
+              contains the "在线阅读" (read online) link.
+            *args:
+            **kwargs:
+        """
         super(ApabiDownloaderSpider, self).__init__(*args, **kwargs)
         self.allowed_domains = [parse.urlparse(book_detail_url).netloc]
         self.var_dict = None
@@ -38,7 +47,14 @@ class ApabiDownloaderSpider(scrapy.Spider):
         self.output_dir = None
         self.make_output_dir()
 
-    def make_output_dir(self):
+    def make_output_dir(self) -> None:
+        """Creates the output folder(s) to save the scraped page images.
+
+        The root output directory is set via the class. Every instance creates the
+        root output directory if not already present. Inside the root output
+        directory, each instance creates a directory with the book's "metaid" as its
+        name. Inside this folder, it saves the book's scraped page images.
+        """
         self.logger.info("Making output directory.")
         try:
             self.output_folder_name = parse.parse_qs(self.book_detail_url)["metaid"][
@@ -52,6 +68,9 @@ class ApabiDownloaderSpider(scrapy.Spider):
             raise
 
     def start_requests(self):
+        # First, we need to log in via IP. Then we need to access the book details
+        # page where we obtain the link to an "OnLineReader" page, which serves the
+        # book's page images. From there, we can download these images.
         start_url = parse.urljoin(self.book_detail_url, "pub.mvc/?pid=login&cult=CN")
         yield from [scrapy.Request(url=start_url, callback=self.parse)]
 
@@ -86,6 +105,9 @@ class ApabiDownloaderSpider(scrapy.Spider):
             )
 
     def create_var_dict(self, response):
+        # The variables that are needed to construct valid requests are saved in
+        # hidden <input> tags in the HTML, which are in turn read by the JavaScript
+        # via their ids.
         var_dict = {}
         for var in response.xpath("//input"):
             if "value" in var.attrib:
@@ -108,7 +130,10 @@ class ApabiDownloaderSpider(scrapy.Spider):
 
     def get_page_total(self, response):
         self.logger.info("Getting page total.")
-        # See reader.js:1692
+        # The total page number of the book is not readily available but needs to be
+        # requested through "Command/Getcontent.ashx", which returns an XML file with
+        # the table of contents/book structure as well as the page total.
+        # See reader.js:1692.
         yield scrapy.FormRequest(
             url=response.urljoin("Command/Getcontent.ashx"),
             method="GET",
@@ -138,8 +163,6 @@ class ApabiDownloaderSpider(scrapy.Spider):
         for page in range(self.page_total):
             if Path(f"{self.output_dir}/{str(page + 1)}.png").is_file():
                 self.downloaded_items.append(page + 1)
-        # From reader.js:657; function getUrl(page)
-        # See also reader.js:2499; window.onload for value initialization
         self.img_url = response.urljoin("command/imagepage.ashx")
         page = self.get_next_page_to_download(start_page=1)
         if page <= self.page_total:
@@ -152,6 +175,11 @@ class ApabiDownloaderSpider(scrapy.Spider):
         return page
 
     def is_timed_out(self):
+        # Each session has a fixed timeout time after which it is not possible to
+        # access any image pages anymore. This timeout is hardcoded to 20 Minutes,
+        # which is saved in variable "txtOnlineViewTime". The actual timeout time is
+        # calculated when the "OnLineReader" page is first accessed. It is saved in
+        # the variable "txtReadSignTime" and also in "time" inside "urlrights".
         timeout_time = datetime.strptime(self.var_dict["time"], "%Y-%m-%d %H:%M:%S")
         time_left = timeout_time - datetime.utcnow()
         if time_left.seconds > 30:
@@ -168,6 +196,10 @@ class ApabiDownloaderSpider(scrapy.Spider):
             yield from self.after_login(response)
         else:
             self.logger.info(f"Getting page {page}.")
+            # Requests to get the images are GET requests to "command/imagepage.ashx"
+            # that are called by the function getUrl(page) from reader.js:657. The
+            # parameters are initialized by window.onload, see also reader.js:2499.
+            # "command/imagepage.ashx" return a PNG as a string.
             yield scrapy.FormRequest(
                 url=self.img_url,
                 method="GET",
@@ -193,6 +225,8 @@ class ApabiDownloaderSpider(scrapy.Spider):
             )
 
     def get_image(self, response, page):
+        # If the session is timed out, GET requests to "command/imagepage.ashx" will
+        # return HTTP status 403.
         if response.status == 403 or self.is_timed_out() is True:
             yield from self.get_new_timeslot(response)
         else:
