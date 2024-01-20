@@ -42,6 +42,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
         self.page_total = None
         self.downloaded_items = None
         self.book_detail_url = book_detail_url
+        self.online_reader_url = None
         self.img_url = None
         self.output_folder_name = None
         self.output_dir = None
@@ -55,12 +56,14 @@ class ApabiDownloaderSpider(scrapy.Spider):
         directory, each instance creates a directory with the book's "metaid" as its
         name. Inside this folder, it saves the book's scraped page images.
         """
-        self.logger.info("Making output directory.")
         try:
             self.output_folder_name = parse.parse_qs(self.book_detail_url)["metaid"][
                 0
             ].lstrip("m.")
             self.output_dir = self.output_dir_base + self.output_folder_name
+            self.logger.info(
+                f"Making output directory. Saving to " f"{self.output_folder_name}."
+            )
             Path(self.output_dir_base).mkdir(exist_ok=True)
             Path(self.output_dir).mkdir(exist_ok=True)
         except Exception as e:
@@ -94,15 +97,18 @@ class ApabiDownloaderSpider(scrapy.Spider):
 
     def after_book_infopage(self, response):
         self.logger.info("Got book info page.")
-        if online_read_page := response.xpath(
+        if online_read_path := response.xpath(
             '//a[contains(@type, "onlineread")]'
         ).attrib["href"]:
-            online_read_page = response.urljoin(online_read_page)
-            yield scrapy.Request(
-                online_read_page,
-                callback=self.on_online_read_page,
-                dont_filter=True,
-            )
+            self.online_reader_url = response.urljoin(online_read_path)
+            yield from self.request_online_reader_page()
+
+    def request_online_reader_page(self):
+        yield scrapy.Request(
+            self.online_reader_url,
+            callback=self.on_online_read_page,
+            dont_filter=True,
+        )
 
     def create_var_dict(self, response):
         # The variables that are needed to construct valid requests are saved in
@@ -166,7 +172,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
         self.img_url = response.urljoin("command/imagepage.ashx")
         page = self.get_next_page_to_download(start_page=1)
         if page <= self.page_total:
-            yield from self.request_img(response, page)
+            yield from self.request_img(page)
 
     def get_next_page_to_download(self, start_page):
         page = start_page
@@ -187,19 +193,19 @@ class ApabiDownloaderSpider(scrapy.Spider):
         else:
             return True
 
-    def get_new_timeslot(self, response):
+    def get_new_timeslot(self):
         self.logger.info("Timeout, getting new timeslot.")
-        yield from self.after_login(response)
+        yield from self.request_online_reader_page()
 
-    def request_img(self, response, page):
+    def request_img(self, page):
         if self.is_timed_out():
-            yield from self.after_login(response)
+            yield from self.get_new_timeslot()
         else:
             self.logger.info(f"Getting page {page}.")
             # Requests to get the images are GET requests to "command/imagepage.ashx"
             # that are called by the function getUrl(page) from reader.js:657. The
             # parameters are initialized by window.onload, see also reader.js:2499.
-            # "command/imagepage.ashx" return a PNG as a string.
+            # "command/imagepage.ashx" returns a PNG as a string.
             yield scrapy.FormRequest(
                 url=self.img_url,
                 method="GET",
@@ -228,10 +234,10 @@ class ApabiDownloaderSpider(scrapy.Spider):
         # If the session is timed out, GET requests to "command/imagepage.ashx" will
         # return HTTP status 403.
         if response.status == 403 or self.is_timed_out() is True:
-            yield from self.get_new_timeslot(response)
+            yield from self.get_new_timeslot()
         else:
             self.logger.info(f"Got page {page}.")
             yield {"page": str(page), "image": response.body}
             next_page = self.get_next_page_to_download(page + 1)
             if next_page <= self.page_total:
-                yield from self.request_img(response, next_page)
+                yield from self.request_img(next_page)
