@@ -13,11 +13,11 @@ def authentication_failed(response):
 
 class ApabiDownloaderSpider(scrapy.Spider):
     name = "apabi_downloader"
-    allowed_domains = ["apabi.lib.pku.edu.cn"]
     output_dir_base = "output/"
 
     def __init__(self, book_detail_url=None, *args, **kwargs):
         super(ApabiDownloaderSpider, self).__init__(*args, **kwargs)
+        self.allowed_domains = [urllib.parse.urlparse(book_detail_url).netloc]
         self.var_dict = None
         self.page_total = None
         self.downloaded_items = None
@@ -39,7 +39,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
             raise
 
     def start_requests(self):
-        start_url = "http://apabi.lib.pku.edu.cn/Usp/pku/pub.mvc/?pid=login&cult=CN"
+        start_url = urllib.parse.urljoin(self.book_detail_url, "pub.mvc/?pid=login&cult=CN")
         yield from [scrapy.Request(url=start_url, callback=self.parse)]
 
     def parse(self, response):
