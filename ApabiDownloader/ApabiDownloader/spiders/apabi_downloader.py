@@ -1,6 +1,6 @@
-import urllib.parse
 from datetime import datetime
 from pathlib import Path
+from urllib import parse
 
 import scrapy
 
@@ -17,7 +17,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
 
     def __init__(self, book_detail_url=None, *args, **kwargs):
         super(ApabiDownloaderSpider, self).__init__(*args, **kwargs)
-        self.allowed_domains = [urllib.parse.urlparse(book_detail_url).netloc]
+        self.allowed_domains = [parse.urlparse(book_detail_url).netloc]
         self.var_dict = None
         self.page_total = None
         self.downloaded_items = None
@@ -30,7 +30,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
     def make_output_dir(self):
         self.logger.info("Making output directory.")
         try:
-            self.output_folder_name = urllib.parse.parse_qs(self.book_detail_url)["metaid"][0].lstrip("m.")
+            self.output_folder_name = parse.parse_qs(self.book_detail_url)["metaid"][0].lstrip("m.")
             self.output_dir = self.output_dir_base + self.output_folder_name
             Path(self.output_dir_base).mkdir(exist_ok=True)
             Path(self.output_dir).mkdir(exist_ok=True)
@@ -39,7 +39,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
             raise
 
     def start_requests(self):
-        start_url = urllib.parse.urljoin(self.book_detail_url, "pub.mvc/?pid=login&cult=CN")
+        start_url = parse.urljoin(self.book_detail_url, "pub.mvc/?pid=login&cult=CN")
         yield from [scrapy.Request(url=start_url, callback=self.parse)]
 
     def parse(self, response):
@@ -74,7 +74,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
             if "value" in var.attrib:
                 var_dict.update({var.attrib["id"]: var.attrib["value"]})
         # Some values are hidden as a string in one entry, need to dissect that
-        var_dict.update(urllib.parse.parse_qsl(var_dict["urlrights"]))
+        var_dict.update(parse.parse_qsl(var_dict["urlrights"]))
         self.var_dict = var_dict
         self.logger.info(
             f'Downloading {self.var_dict["bookName"]} by {self.var_dict["creator"]}. '
