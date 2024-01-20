@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib import parse
 
@@ -122,8 +122,16 @@ class ApabiDownloaderSpider(scrapy.Spider):
         var_dict.update(parse.parse_qsl(var_dict["urlrights"]))
         self.var_dict = var_dict
         self.logger.info(
-            f'Downloading {self.var_dict["bookName"]} by {self.var_dict["creator"]}. '
-            f'Access is provided by {self.var_dict["txtOrgIdentifier"]}.'
+            f'Downloading {self.var_dict["bookName"]} by {self.var_dict["creator"]}.'
+        )
+        self.logger.info(f'Access is provided by {self.var_dict["txtOrgIdentifier"]}.')
+        self.logger.info(
+            "Next timeout on {}.".format(
+                datetime.strptime(self.var_dict["time"], "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=timezone.utc)
+                .astimezone()
+                .isoformat()
+            )
         )
 
     def on_online_read_page(self, response):
@@ -201,7 +209,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
         if self.is_timed_out():
             yield from self.get_new_timeslot()
         else:
-            self.logger.info(f"Getting page {page}.")
+            self.logger.info(f"Getting page {page} of {self.page_total}.")
             # Requests to get the images are GET requests to "command/imagepage.ashx"
             # that are called by the function getUrl(page) from reader.js:657. The
             # parameters are initialized by window.onload, see also reader.js:2499.
@@ -236,7 +244,7 @@ class ApabiDownloaderSpider(scrapy.Spider):
         if response.status == 403 or self.is_timed_out() is True:
             yield from self.get_new_timeslot()
         else:
-            self.logger.info(f"Got page {page}.")
+            self.logger.info(f"Got page {page} of {self.page_total}.")
             yield {"page": str(page), "image": response.body}
             next_page = self.get_next_page_to_download(page + 1)
             if next_page <= self.page_total:
